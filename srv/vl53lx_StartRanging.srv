@@ -1,0 +1,4 @@
+bool Start
+float32 PollingRatioHz
+---
+bool Started

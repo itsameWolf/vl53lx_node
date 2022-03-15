@@ -1,0 +1,8 @@
+int16 RangeMaxMilliMeter
+int16 RangeMinMilliMeter
+float32 SignalRateRtnMegaCps
+float32 AmbientRateRtnMegaCps
+float32 SigmaMilliMeter
+float32 RangeMilliMiter
+int8 RangeStatus
+int8 ExtendedRange

@@ -1,0 +1,7 @@
+Header Header
+
+int8 StreamCount
+int8 NumberOfObjectsFound
+vl53lx_TargetRangeData[4] TargetRangeData
+int8 HasXtalkValueChanged
+int16 EffectiveSpadRtnCount
