@@ -18,7 +18,9 @@ bool ranging_flag = false;
 
 float polling_ratio = 4;
 
-vl53lx_node::vl53lx_MultiRangingData MultiRangingDataMSG;
+//vl53lx_node::vl53lx_MultiRangingData MultiRangingDataMSG;
+
+ros::Publisher multi_range_pub;
 
 bool startRanging(vl53lx_node::vl53lx_StartRanging::Request &req,
                   vl53lx_node::vl53lx_StartRanging::Response &res);
@@ -42,6 +44,7 @@ int main(int argc, char **argv)
   ros::ServiceServer stop_ranging = n.advertiseService("stop_ranging", stopRanging);
   ROS_INFO("stop_ranging service server started");
 
+  multi_range_pub = n.advertise<vl53lx_node::vl53lx_MultiRangingData>("vl53lx_multi_ranging_data",5);
 
 
   while (ros::ok())
@@ -125,6 +128,9 @@ void RangingLoop(void)
 {
   VL53LX_MultiRangingData_t MultiRangingData;
   VL53LX_MultiRangingData_t *pMultiRangingData = &MultiRangingData;
+
+  vl53lx_node::vl53lx_MultiRangingData msg_data;
+
   uint8_t NewDataReady=0;
   int no_of_object_found=1;
   //int j;
@@ -134,7 +140,8 @@ void RangingLoop(void)
   status = VL53LX_DataInit(Dev);
   status = VL53LX_StartMeasurement(Dev);
   
-  if(status){
+  if(status)
+  {
     printf("VL53LX_StartMeasurement failed: error = %d \n", status);
     while(1);
   }
@@ -142,24 +149,45 @@ void RangingLoop(void)
     // Wait for data to be read, blocking.
     status = VL53LX_GetMeasurementDataReady(Dev,&NewDataReady);                       
     usleep(250000);
-    if ((status == VL53LX_ERROR_NONE)&&(NewDataReady==1)){
-        // wait for measurement data ready
-        status = VL53LX_GetMultiRangingData(Dev, pMultiRangingData);
-        no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
-        ROS_INFO("Status: %d Objects found=%5d \n ",status, no_of_object_found);
-        for(int j=0;j<no_of_object_found;j++){
-            ROS_INFO("status=%d, D=%5dmm, S=%7dmm, Signal=%2.2f Mcps, Ambient=%2.2f Mcps",
-               pMultiRangingData->RangeData[j].RangeStatus,
-               pMultiRangingData->RangeData[j].RangeMilliMeter,
-               pMultiRangingData->RangeData[j].SigmaMilliMeter,
-               pMultiRangingData->RangeData[j].SignalRateRtnMegaCps/65536.0,
-               pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
-        }
-        // clear interupt and start new measurement
-        if (status==0)
-        {
-          status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
-        }
+    if ((status == VL53LX_ERROR_NONE)&&(NewDataReady==1))
+    {
+      // wait for measurement data ready
+      status = VL53LX_GetMultiRangingData(Dev, pMultiRangingData);
+
+      msg_data.StreamCount = pMultiRangingData->StreamCount;
+      msg_data.NumberOfObjectsFound = pMultiRangingData->NumberOfObjectsFound;
+      msg_data.HasXtalkValueChanged = pMultiRangingData->HasXtalkValueChanged;
+      msg_data.EffectiveSpadRtnCount = pMultiRangingData->EffectiveSpadRtnCount;
+
+      no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
+      ROS_INFO("Status: %d Objects found=%5d \n ",status, no_of_object_found);
+
+      for(int j=0;j<no_of_object_found;j++)
+      {
+        ROS_INFO("status=%d, D=%5dmm, S=%7dmm, Signal=%2.2f Mcps, Ambient=%2.2f Mcps",
+            pMultiRangingData->RangeData[j].RangeStatus,
+            pMultiRangingData->RangeData[j].RangeMilliMeter,
+            pMultiRangingData->RangeData[j].SigmaMilliMeter,
+            pMultiRangingData->RangeData[j].SignalRateRtnMegaCps/65536.0,
+            pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
+
+        msg_data.TargetRangeData[j].RangeMaxMilliMeter = pMultiRangingData->RangeData[j].RangeMaxMilliMeter;
+        msg_data.TargetRangeData[j].RangeMinMilliMeter = pMultiRangingData->RangeData[j].RangeMinMilliMeter;
+        msg_data.TargetRangeData[j].SignalRateRtnMegaCps = pMultiRangingData->RangeData[j].SignalRateRtnMegaCps;
+        msg_data.TargetRangeData[j].AmbientRateRtnMegaCps = pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps;
+        msg_data.TargetRangeData[j].SigmaMilliMeter = pMultiRangingData->RangeData[j].SigmaMilliMeter;
+        msg_data.TargetRangeData[j].RangeMilliMeter = pMultiRangingData->RangeData[j].RangeMilliMeter;
+        msg_data.TargetRangeData[j].RangeStatus = pMultiRangingData->RangeData[j].RangeStatus;
+        msg_data.TargetRangeData[j].ExtendedRange = pMultiRangingData->RangeData[j].ExtendedRange;
+      }
+
+      multi_range_pub.publish(msg_data);
+
+      // clear interupt and start new measurement
+      if (status==0)
+      {
+        status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
+      }
     }
     ros::spinOnce();
   }
